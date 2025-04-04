@@ -130,6 +130,43 @@ func listFiles(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(fileList)
 }
 
+func deleteFile(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "DELETE, OPTIONS")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	filename := filepath.Base(r.URL.Path)
+	filePath := filepath.Join(uploadDir, filename)
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		sendJSONError(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	err := os.Remove(filePath)
+	if err != nil {
+		sendJSONError(w, "Error deleting file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := FileResponse{
+		Status:  "success",
+		File:    filename,
+		Message: "File deleted successfully",
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
 func serveFiles(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
@@ -212,6 +249,7 @@ func main() {
 	mux.HandleFunc("/upload", handleFileUpload)
 	mux.HandleFunc("/shared/", serveFiles)
 	mux.HandleFunc("/api/files", listFiles)
+	mux.HandleFunc("/api/delete/", deleteFile)
 
 	localIP := getLocalIP()
 	localURL := fmt.Sprintf("http://%s:%d", localIP, serverPort)
